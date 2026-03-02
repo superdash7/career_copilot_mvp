@@ -1,0 +1,380 @@
+Career Copilot — AI Career Pathfinder
+
+Персональный навигатор карьерного роста на основе AI
+
+Анализ навыков · Gap-анализ · План развития 70/20/10
+
+Что это
+
+Career Copilot — веб-приложение, которое помогает специалистам построить индивидуальный план карьерного развития. Система сопоставляет текущие навыки пользователя с требованиями целевой роли, определяет зоны роста и генерирует конкретные шаги по модели 70/20/10 (практика / менторство / обучение).
+
+Три сценария
+
+Сценарий	Что делает
+Следующий грейд	Показывает, что нужно для перехода Junior → Middle → Senior → Lead → Expert в текущей роли
+Смена профессии	Сравнивает навыки с требованиями новой роли, находит пересечения и пробелы
+Исследование возможностей	Ранжирует все доступные роли по совпадению с профилем пользователя
+Как это работает
+
+┌─ Пользователь ──────────────────────────────────────────────┐
+│                                                              │
+│  1. Выбирает профессию и сценарий                           │
+│  2. Добавляет навыки (из резюме PDF или вручную)            │
+│  3. Получает персональный план развития                      │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─ Backend Pipeline ──────────────────────────────────────────┐
+│                                                              │
+│  Нормализация навыков (pymorphy3 + синонимы)                │
+│       ↓                                                      │
+│  Подбор требований роли из справочника                       │
+│       ↓                                                      │
+│  Gap-анализ: текущий уровень vs требуемый                   │
+│       ↓                                                      │
+│  Обогащение контекстом через RAG (Qdrant)                   │
+│       ↓                                                      │
+│  Генерация плана через GPT-4o (модель 70/20/10)             │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+Архитектура
+
+┌────────────────────────────────────────────────────────────────────────┐
+│                         КЛИЕНТ (Браузер)                               │
+│                                                                        │
+│   React 19 · TypeScript 5.9 · Tailwind CSS 4 · Vite 7                │
+│                                                                        │
+│   ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐ │
+│   │ Welcome  │→ │ GoalSetup│→ │  Skills  │→ │ Confirm  │→ │ Result │ │
+│   └──────────┘  └──────────┘  └──────────┘  └──────────┘  └────────┘ │
+│        ↑              ↑             ↑              ↑            ↑     │
+│        └──────── History API (browser back/forward) ────────────┘     │
+│                  sessionStorage (persist on refresh)                    │
+│                                                                        │
+│   Компоненты: SearchableSelect · SkillCard · ScenarioCard · Toast    │
+│               Stepper · Skeleton · ErrorBoundary · FeedbackRating     │
+│                                                                        │
+└────────────────────────────┬───────────────────────────────────────────┘
+                             │
+                             │  HTTP (JSON / multipart)
+                             │  AbortController для отмены запросов
+                             │
+┌────────────────────────────▼───────────────────────────────────────────┐
+│                      FastAPI (api.py)                                   │
+│                                                                        │
+│   REST API                         SPA Fallback                        │
+│   ├─ GET  /api/professions         /{path} → frontend/dist/index.html │
+│   ├─ GET  /api/skills-for-role                                        │
+│   ├─ GET  /api/suggest-skills                                         │
+│   ├─ POST /api/analyze-resume                                         │
+│   ├─ POST /api/plan                                                   │
+│   └─ GET  /health                                                     │
+│                                                                        │
+├────────────────────────────────────────────────────────────────────────┤
+│                       БИЗНЕС-ЛОГИКА                                    │
+│                                                                        │
+│   ┌───────────────────┐     ┌──────────────┐     ┌──────────────────┐ │
+│   │ scenario_handler  │     │ gap_analyzer │     │ output_formatter │ │
+│   │                   │     │              │     │                  │ │
+│   │ Маршрутизация     │     │ Сопоставление│     │ Markdown-отчёт   │ │
+│   │ по сценарию       │────▶│ навыков с    │────▶│ + вызов LLM      │ │
+│   │                   │     │ требованиями │     │ для плана        │ │
+│   └───────┬───────────┘     └──────────────┘     └────────┬─────────┘ │
+│           │                                               │           │
+│   ┌───────▼───────────────────────────┐    ┌──────────────▼─────────┐ │
+│   │ next_grade_service                │    │ plan_generator         │ │
+│   │ switch_profession_service         │    │                        │ │
+│   │ explore_recommendations           │    │ GPT-4o: план 70/20/10 │ │
+│   │                                   │    │ retry + fallback       │ │
+│   │ Детализация каждого сценария      │    │                        │ │
+│   └───────────────────────────────────┘    └────────────────────────┘ │
+│                                                                        │
+├────────────────────────────────────────────────────────────────────────┤
+│                     ДАННЫЕ И NLP                                       │
+│                                                                        │
+│   ┌──────────────┐   ┌────────────────┐   ┌──────────────────────┐   │
+│   │ data_loader  │   │ skill_         │   │ rag_service          │   │
+│   │              │   │ normalizer     │   │                      │   │
+│   │ JSON-спра-   │   │                │   │ Sentence-Transformers│   │
+│   │ вочники      │   │ pymorphy3 (RU) │   │ + Qdrant             │   │
+│   │ навыков и    │   │ Snowball  (EN) │   │                      │   │
+│   │ атласа       │   │ + синонимы     │   │ Семантический поиск, │   │
+│   │              │   │                │   │ подсказки, ранжиро-  │   │
+│   └──────────────┘   └────────────────┘   │ вание ролей          │   │
+│                                            └──────────────────────┘   │
+│   ┌──────────────┐                                                    │
+│   │ resume_      │                                                    │
+│   │ parser       │   PDF → текст (pypdf) → GPT-4o → навыки          │
+│   └──────────────┘                                                    │
+│                                                                        │
+├────────────────────────────────────────────────────────────────────────┤
+│                     ВНЕШНИЕ СЕРВИСЫ                                     │
+│                                                                        │
+│   ┌──────────────────────┐       ┌──────────────────────────────┐     │
+│   │  OpenAI API          │       │  Qdrant Cloud (опционально)  │     │
+│   │  GPT-4o              │       │  Векторная БД для RAG        │     │
+│   │  - парсинг резюме    │       │  - эмбеддинги навыков        │     │
+│   │  - генерация плана   │       │  - семантический поиск       │     │
+│   └──────────────────────┘       └──────────────────────────────┘     │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
+Поток данных при построении плана
+
+  Пользователь              Frontend                   Backend
+  ──────────                ────────                   ───────
+       │                        │                          │
+       │  Выбирает профессию    │                          │
+       │───────────────────────▶│  GET /api/professions    │
+       │                        │─────────────────────────▶│
+       │                        │◀─────────────────────────│
+       │                        │                          │
+       │  Загружает PDF         │                          │
+       │───────────────────────▶│  POST /api/analyze-resume│
+       │                        │─────────────────────────▶│  pypdf → текст
+       │                        │                          │  GPT-4o → навыки
+       │                        │                          │  pymorphy3 → нормализация
+       │                        │◀─────────────────────────│  [{name, level}]
+       │                        │                          │
+       │  Нажимает «Построить»  │                          │
+       │───────────────────────▶│  POST /api/plan          │
+       │                        │─────────────────────────▶│  scenario_handler
+       │                        │                          │  → gap_analyzer
+       │                        │                          │  → rag_service (контекст)
+       │                        │                          │  → output_formatter
+       │                        │                          │  → plan_generator (GPT-4o)
+       │                        │◀─────────────────────────│  {markdown, role_titles?}
+       │                        │                          │
+       │  Видит план развития   │                          │
+       │◀───────────────────────│  ReactMarkdown + TOC     │
+Технологии
+
+Backend
+
+Технология	Версия	Назначение
+Python	3.12	Основной язык бэкенда
+FastAPI	≥ 0.100	REST API с автогенерацией OpenAPI-документации
+Uvicorn	≥ 0.22	ASGI-сервер
+Pydantic	v2	Валидация запросов/ответов
+pymorphy3	≥ 2.0	Лемматизация русского языка (замена NLTK-стемминга)
+Sentence-Transformers	≥ 2.2	Мультиязычные эмбеддинги для RAG
+PyTorch	CPU	Runtime для Sentence-Transformers
+pypdf	≥ 3.0	Извлечение текста из PDF
+scikit-learn	≥ 1.0	Кластеризация навыков (KMeans)
+OpenAI SDK	≥ 1.0	Взаимодействие с GPT-4o
+Frontend
+
+Технология	Версия	Назначение
+React	19	UI-фреймворк с функциональными компонентами и хуками
+TypeScript	5.9	Строгая типизация всего приложения
+Vite	7	Сборщик с мгновенным HMR
+Tailwind CSS	4	Utility-first стилизация с CSS-переменными для тем
+React Markdown	10	Рендеринг Markdown-планов с поддержкой GFM
+Lucide React	—	SVG-иконки (tree-shakeable)
+React Dropzone	15	Drag-and-drop загрузка PDF
+Внешние сервисы
+
+Сервис	Назначение	Обязательность
+OpenAI GPT-4o	Парсинг резюме, генерация планов	Да
+Qdrant Cloud	Векторная БД для RAG	Нет (деградация: нет семантических подсказок)
+Инфраструктура
+
+Технология	Назначение
+Docker (multi-stage)	Stage 1: Node.js собирает фронтенд. Stage 2: Python запускает бэкенд
+Railway	Облачный хостинг с автодеплоем из main
+Структура проекта
+
+career-copilot/
+│
+├── api.py                          # FastAPI REST API + SPA-раздача
+├── main.py                         # Gradio UI (альтернативный интерфейс)
+├── config.py                       # Конфигурация и env-переменные
+│
+├── data_loader.py                  # Загрузка JSON-справочников, требования ролей
+├── skill_normalizer.py             # Лемматизация (pymorphy3) + словарь синонимов
+├── resume_parser.py                # PDF → текст → GPT-4o → навыки
+├── rag_service.py                  # RAG: Qdrant + Sentence-Transformers
+│
+├── scenario_handler.py             # Маршрутизация трёх сценариев
+├── next_grade_service.py           # Логика «Следующий грейд»
+├── switch_profession_service.py    # Логика «Смена профессии»
+├── explore_recommendations.py      # Логика «Исследование возможностей»
+│
+├── gap_analyzer.py                 # Gap-анализ: навыки vs требования
+├── output_formatter.py             # Markdown-отчёт + вызов plan_generator
+├── plan_generator.py               # Генерация плана 70/20/10 через GPT-4o
+│
+├── build_rag_index.py              # Скрипт построения RAG-индекса в Qdrant
+│
+├── data/
+│   ├── clean_skills.json           # ~6 900 навыков с привязкой к профессиям
+│   ├── atlas_params_clean.json     # Параметры карьерного роста по грейдам
+│   └── skill_synonyms.json         # Словарь синонимов навыков
+│
+├── tests/
+│   ├── test_skill_normalizer.py
+│   ├── test_next_grade_service.py
+│   ├── test_switch_profession_service.py
+│   └── test_explore_recommendations.py
+│
+├── frontend/                       # React SPA
+│   ├── src/
+│   │   ├── main.tsx                # Точка входа: React 19 + ThemeProvider + ErrorBoundary
+│   │   ├── App.tsx                 # Корневой компонент: состояние, навигация, persistence
+│   │   │
+│   │   ├── screens/
+│   │   │   ├── Welcome.tsx         # Лендинг с CTA
+│   │   │   ├── GoalSetup.tsx       # Профессия + сценарий + грейд
+│   │   │   ├── Skills.tsx          # Ввод навыков (PDF / вручную / подсказки)
+│   │   │   ├── Confirmation.tsx    # Проверка данных перед генерацией
+│   │   │   └── Result.tsx          # Отображение плана с TOC
+│   │   │
+│   │   ├── components/
+│   │   │   ├── SearchableSelect.tsx # Комбобокс с поиском для профессий
+│   │   │   ├── SkillCard.tsx        # Карточка навыка с уровнем
+│   │   │   ├── ScenarioCard.tsx     # Карточка сценария
+│   │   │   ├── ErrorBoundary.tsx    # Перехват неожиданных ошибок
+│   │   │   ├── Toast.tsx            # Toast-уведомления (undo и др.)
+│   │   │   ├── toastStore.ts        # Глобальный store для toast-ов
+│   │   │   ├── Skeleton.tsx         # Skeleton-загрузочные экраны
+│   │   │   ├── FeedbackRating.tsx   # Оценка полезности плана
+│   │   │   ├── Alert.tsx            # Алерты (error/warning/info/success)
+│   │   │   ├── Layout.tsx           # Обёртка: header + stepper + footer
+│   │   │   ├── NavBar.tsx           # Логотип + переключатель темы
+│   │   │   ├── Stepper.tsx          # Прогресс-индикатор (5 шагов)
+│   │   │   ├── Spinner.tsx          # Индикатор загрузки
+│   │   │   ├── MiniProgress.tsx     # Метка «Шаг N из M»
+│   │   │   └── SoftOnboardingHint.tsx # Всплывающие подсказки
+│   │   │
+│   │   ├── api/
+│   │   │   └── client.ts           # API-клиент с AbortController
+│   │   │
+│   │   ├── types/
+│   │   │   └── index.ts            # TypeScript-типы: Skill, AppState, PlanRequest и др.
+│   │   │
+│   │   ├── theme.tsx               # ThemeProvider (dark/light)
+│   │   ├── themeContext.ts         # React Context для темы
+│   │   ├── useTheme.ts            # Хук для доступа к теме
+│   │   └── index.css              # Tailwind + CSS-переменные + анимации
+│   │
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tsconfig.json
+│   └── eslint.config.js
+│
+├── requirements.txt
+├── Dockerfile
+├── Procfile
+└── docs/
+    ├── ARCHITECTURE.md
+    ├── TECHNICAL_DESCRIPTION.md
+    └── DEPLOY_RAILWAY.md
+Быстрый старт
+
+Предварительные требования
+
+Python 3.12+
+Node.js 20+ (для сборки фронтенда)
+API-ключ OpenAI
+Установка
+
+git clone https://github.com/superdash777/career_buid_sysytem.git
+cd career_buid_sysytem
+
+# Backend
+pip install -r requirements.txt
+
+# Frontend
+cd frontend && npm install && npm run build && cd ..
+Настройка
+
+Создайте файл .env в корне проекта:
+
+OPENAI_API_KEY=sk-...
+
+# Опционально (для RAG):
+QDRANT_URL=https://xxx.qdrant.io
+QDRANT_API_KEY=...
+Запуск
+
+# REST API + React SPA
+python api.py
+# → http://localhost:8000
+
+# Альтернативно: Gradio UI
+python main.py
+# → http://localhost:7860
+Docker
+
+docker build -t career-copilot .
+docker run -p 8000:8000 -e OPENAI_API_KEY=sk-... career-copilot
+REST API
+
+Документация доступна по адресу http://localhost:8000/docs (Swagger UI).
+
+Метод	Путь	Описание
+GET	/api/professions	Список профессий
+GET	/api/skills-for-role?profession=...	Навыки для профессии
+GET	/api/suggest-skills?q=...	Подсказки навыков (синонимы + RAG)
+POST	/api/analyze-resume	Загрузка PDF → список навыков
+POST	/api/plan	Построение плана развития
+GET	/health	Health check
+Пример: построение плана
+
+curl -X POST http://localhost:8000/api/plan \
+  -H "Content-Type: application/json" \
+  -d '{
+    "profession": "Product Manager",
+    "grade": "Специалист (Middle)",
+    "skills": [{"name": "SQL", "level": 1.5}, {"name": "Коммуникация", "level": 2}],
+    "scenario": "Следующий грейд"
+  }'
+Ответ:
+
+{
+  "markdown": "# План развития: Product Manager → Senior\n\n...",
+  "role_titles": null
+}
+Переменные окружения
+
+Переменная	Обязательно	По умолчанию	Описание
+OPENAI_API_KEY	Да	—	Ключ OpenAI API
+QDRANT_URL	Нет	—	URL Qdrant для RAG
+QDRANT_API_KEY	Нет	—	API-ключ Qdrant
+RESUME_PARSER_MODEL	Нет	gpt-4o	Модель для парсинга резюме
+RESUME_TEXT_MAX_CHARS	Нет	14000	Лимит текста резюме
+RAG_COLLECTION_NAME	Нет	career_pathfinder_rag	Название коллекции Qdrant
+EMBED_MODEL_NAME	Нет	paraphrase-multilingual-MiniLM-L12-v2	Модель эмбеддингов
+PORT	Нет	8000	Порт сервера
+Без Qdrant приложение работает полностью — не будет семантических подсказок навыков и семантического ранжирования ролей, но gap-анализ и генерация планов доступны.
+
+Данные
+
+Навыки (data/clean_skills.json)
+
+~6 900 записей. Каждый навык привязан к профессии и содержит описания трёх уровней владения:
+
+Basic — применяет в типовых ситуациях
+Proficiency — применяет в нестандартных ситуациях
+Advanced — может обучать других
+Атлас параметров (data/atlas_params_clean.json)
+
+~10 метакомпетенций (автономность, масштаб задач, сложность, коммуникация). Для каждого параметра определены ожидания по пяти грейдам (Junior → Expert). Применяются ко всем профессиям.
+
+Синонимы (data/skill_synonyms.json)
+
+Словарь {вариант: каноническое_название}. Используется для нормализации: «питон» → «Python», «эксель» → «Excel».
+
+Тесты
+
+pytest tests/ -v
+Покрытие: нормализация навыков, сценарии (next grade, switch profession, explore), gap-анализ.
+
+Деплой
+
+Приложение деплоится на Railway с автодеплоем из ветки main. Подробности: docs/DEPLOY_RAILWAY.md.
+
+Multi-stage Docker-сборка:
+
+Stage 1 (Node.js 20) — npm ci && npm run build → статические файлы
+Stage 2 (Python 3.12) — pip install + исходный код + собранный фронтенд

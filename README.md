@@ -22,7 +22,7 @@ Career Copilot — веб-приложение, которое помогает 
 | **Смена профессии** | Сравнивает навыки с требованиями новой роли, находит пересечения и пробелы |
 | **Исследование возможностей** | Ранжирует все доступные роли по совпадению с профилем пользователя |
 
-### Как это работает
+### Как работает сервис (подробное описание решения в docs)
 
 ```
 ┌─ Пользователь ──────────────────────────────────────────────┐
@@ -185,7 +185,7 @@ Career Copilot — веб-приложение, которое помогает 
 | scikit-learn | ≥ 1.0 | Кластеризация навыков (KMeans) |
 | OpenAI SDK | ≥ 1.0 | Взаимодействие с GPT-4o |
 
-### Frontend
+### Frontend (реализован с помощью Cursor AI)
 
 | Технология | Версия | Назначение |
 |---|---|---|
@@ -302,61 +302,6 @@ career-copilot/
     ├── TECHNICAL_DESCRIPTION.md
     └── DEPLOY_RAILWAY.md
 ```
-
----
-
-## Быстрый старт
-
-### Предварительные требования
-
-- Python 3.12+
-- Node.js 20+ (для сборки фронтенда)
-- API-ключ OpenAI
-
-### Установка
-
-```bash
-git clone https://github.com/superdash777/career_buid_sysytem.git
-cd career_buid_sysytem
-
-# Backend
-pip install -r requirements.txt
-
-# Frontend
-cd frontend && npm install && npm run build && cd ..
-```
-
-### Настройка
-
-Создайте файл `.env` в корне проекта:
-
-```env
-OPENAI_API_KEY=sk-...
-
-# Опционально (для RAG):
-QDRANT_URL=https://xxx.qdrant.io
-QDRANT_API_KEY=...
-```
-
-### Запуск
-
-```bash
-# REST API + React SPA
-python api.py
-# → http://localhost:8000
-
-# Альтернативно: Gradio UI
-python main.py
-# → http://localhost:7860
-```
-
-### Docker
-
-```bash
-docker build -t career-copilot .
-docker run -p 8000:8000 -e OPENAI_API_KEY=sk-... career-copilot
-```
-
 ---
 
 ## REST API
@@ -430,16 +375,6 @@ curl -X POST http://localhost:8000/api/plan \
 ### Синонимы (`data/skill_synonyms.json`)
 
 Словарь `{вариант: каноническое_название}`. Используется для нормализации: «питон» → «Python», «эксель» → «Excel».
-
----
-
-## Тесты
-
-```bash
-pytest tests/ -v
-```
-
-Покрытие: нормализация навыков, сценарии (next grade, switch profession, explore), gap-анализ.
 
 ---
 

@@ -345,10 +345,6 @@ career-copilot/
 
 ## Деплой
 
-Приложение деплоится на Railway с автодеплоем из ветки `main`. Подробности: [docs/DEPLOY_RAILWAY.md](docs/DEPLOY_RAILWAY.md).
-
-Multi-stage Docker-сборка:
-1. **Stage 1 (Node.js 20)** — `npm ci && npm run build` → статические файлы
-2. **Stage 2 (Python 3.12)** — `pip install` + исходный код + собранный фронтенд
+Приложение деплоится на Railway с автодеплоем из ветки `main`. 
 
 

@@ -22,7 +22,7 @@ Career Copilot — веб-приложение, которое помогает 
 | **Смена профессии** | Сравнивает навыки с требованиями новой роли, находит пересечения и пробелы |
 | **Исследование возможностей** | Ранжирует все доступные роли по совпадению с профилем пользователя |
 
-### Как это работает
+### Как это работает (подробное описание решение расположено в docs)
 
 ```
 ┌─ Пользователь ──────────────────────────────────────────────┐
@@ -185,7 +185,7 @@ Career Copilot — веб-приложение, которое помогает 
 | scikit-learn | ≥ 1.0 | Кластеризация навыков (KMeans) |
 | OpenAI SDK | ≥ 1.0 | Взаимодействие с GPT-4o |
 
-### Frontend
+### Frontend (Реализован с помощью Cursor AI)
 
 | Технология | Версия | Назначение |
 |---|---|---|
@@ -305,97 +305,6 @@ career-copilot/
 
 ---
 
-## Быстрый старт
-
-### Предварительные требования
-
-- Python 3.12+
-- Node.js 20+ (для сборки фронтенда)
-- API-ключ OpenAI
-
-### Установка
-
-```bash
-git clone https://github.com/superdash777/career_buid_sysytem.git
-cd career_buid_sysytem
-
-# Backend
-pip install -r requirements.txt
-
-# Frontend
-cd frontend && npm install && npm run build && cd ..
-```
-
-### Настройка
-
-Создайте файл `.env` в корне проекта:
-
-```env
-OPENAI_API_KEY=sk-...
-
-# Опционально (для RAG):
-QDRANT_URL=https://xxx.qdrant.io
-QDRANT_API_KEY=...
-```
-
-### Запуск
-
-```bash
-# REST API + React SPA
-python api.py
-# → http://localhost:8000
-
-# Альтернативно: Gradio UI
-python main.py
-# → http://localhost:7860
-```
-
-### Docker
-
-```bash
-docker build -t career-copilot .
-docker run -p 8000:8000 -e OPENAI_API_KEY=sk-... career-copilot
-```
-
----
-
-## REST API
-
-Документация доступна по адресу `http://localhost:8000/docs` (Swagger UI).
-
-| Метод | Путь | Описание |
-|---|---|---|
-| GET | `/api/professions` | Список профессий |
-| GET | `/api/skills-for-role?profession=...` | Навыки для профессии |
-| GET | `/api/suggest-skills?q=...` | Подсказки навыков (синонимы + RAG) |
-| POST | `/api/analyze-resume` | Загрузка PDF → список навыков |
-| POST | `/api/plan` | Построение плана развития |
-| GET | `/health` | Health check |
-
-### Пример: построение плана
-
-```bash
-curl -X POST http://localhost:8000/api/plan \
-  -H "Content-Type: application/json" \
-  -d '{
-    "profession": "Product Manager",
-    "grade": "Специалист (Middle)",
-    "skills": [{"name": "SQL", "level": 1.5}, {"name": "Коммуникация", "level": 2}],
-    "scenario": "Следующий грейд"
-  }'
-```
-
-Ответ:
-
-```json
-{
-  "markdown": "# План развития: Product Manager → Senior\n\n...",
-  "role_titles": null
-}
-```
-
----
-
 ## Переменные окружения
 
 | Переменная | Обязательно | По умолчанию | Описание |
@@ -433,15 +342,6 @@ curl -X POST http://localhost:8000/api/plan \
 
 ---
 
-## Тесты
-
-```bash
-pytest tests/ -v
-```
-
-Покрытие: нормализация навыков, сценарии (next grade, switch profession, explore), gap-анализ.
-
----
 
 ## Деплой
 
@@ -451,8 +351,4 @@ Multi-stage Docker-сборка:
 1. **Stage 1 (Node.js 20)** — `npm ci && npm run build` → статические файлы
 2. **Stage 2 (Python 3.12)** — `pip install` + исходный код + собранный фронтенд
 
----
 
-## Лицензия
-
-Проект для учебных целей.

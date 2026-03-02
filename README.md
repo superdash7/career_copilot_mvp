@@ -380,7 +380,7 @@ curl -X POST http://localhost:8000/api/plan \
 
 ## Деплой
 
-Приложение деплоится на Railway с автодеплоем из ветки `main`. Подробности: [docs/DEPLOY_RAILWAY.md](docs/DEPLOY_RAILWAY.md).
+Приложение деплоится на Railway с автодеплоем из ветки `main`. 
 
 Multi-stage Docker-сборка:
 1. **Stage 1 (Node.js 20)** — `npm ci && npm run build` → статические файлы
